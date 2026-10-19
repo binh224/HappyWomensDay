@@ -101,6 +101,9 @@ top: 18%;
 animation: float 3s ease-in-out infinite;
 width: 90%;
 max-width: 420px;
+z-index: 10;
+opacity: 0;
+transition: opacity 2s ease;
 }
 
 @keyframes float {
@@ -271,6 +274,130 @@ border-top: 245px solid transparent;
 left: -200px;
 top: -120px;
 border-radius: 0px 0 32px 20px;
+}
+
+/* ---- Heart intro burst + endless falling hearts (ported from the Valentine version) ---- */
+#intro-container
+{
+position: fixed;
+top: 0;
+left: 0;
+width: 100vw;
+height: 100vh;
+z-index: 9999;
+pointer-events: none;
+overflow: hidden;
+}
+
+.intro-heart
+{
+position: absolute;
+width: 20px;
+height: 32px;
+background-color: var(--heart-color);
+border-top-left-radius: 20px;
+border-top-right-radius: 20px;
+opacity: 0;
+will-change: transform, opacity;
+animation: bloomShakeAndFall 4.5s ease-in-out forwards;
+}
+
+.intro-heart::before
+{
+content: "";
+position: absolute;
+width: 20px;
+height: 32px;
+left: 6px;
+top: 6px;
+background-color: var(--heart-color);
+transform: rotate(90deg);
+border-top-left-radius: 20px;
+border-top-right-radius: 20px;
+}
+
+@keyframes bloomShakeAndFall
+{
+0% { transform: rotate(-45deg) scale(0); opacity: 0; }
+15% { opacity: 1; transform: rotate(-45deg) scale(var(--final-scale)); }
+30% { transform: rotate(-40deg) scale(var(--final-scale)); }
+40% { transform: rotate(-50deg) scale(var(--final-scale)); }
+50% { transform: rotate(-45deg) scale(var(--final-scale)); opacity: 1; }
+100% { transform: rotate(-45deg) scale(var(--final-scale)) translate3d(0, 120vh, 0); opacity: 0; }
+}
+
+#falling-hearts-container
+{
+position: fixed;
+top: 0;
+left: 0;
+width: 100%;
+height: 100%;
+z-index: 98;
+pointer-events: none;
+overflow: hidden;
+}
+
+.falling-heart-wrapper
+{
+position: absolute;
+top: -10%;
+will-change: transform;
+animation: fallDown linear infinite;
+}
+
+.falling-heart-shape
+{
+width: 15px;
+height: 24px;
+background-color: var(--color);
+border-top-left-radius: 12px;
+border-top-right-radius: 12px;
+transform: rotate(-45deg);
+animation: sway1 ease-in-out infinite alternate;
+}
+
+.falling-heart-shape::before
+{
+content: "";
+position: absolute;
+width: 15px;
+height: 24px;
+left: 5px;
+top: 5px;
+background-color: var(--color);
+transform: rotate(90deg);
+border-top-left-radius: 12px;
+border-top-right-radius: 12px;
+}
+
+@keyframes fallDown
+{
+to { transform: translateY(120vh); }
+}
+@keyframes fallDriftLeft
+{
+to { transform: translateY(120vh) translateX(-100px); }
+}
+@keyframes fallDriftRight
+{
+to { transform: translateY(120vh) translateX(100px); }
+}
+
+@keyframes sway1
+{
+0% { transform: rotate(-45deg) translateX(-15px) rotateZ(-10deg); }
+100% { transform: rotate(-45deg) translateX(15px) rotateZ(10deg); }
+}
+@keyframes sway2
+{
+0% { transform: rotate(-45deg) translateX(-30px) rotateZ(-20deg); }
+100% { transform: rotate(-45deg) translateX(30px) rotateZ(20deg); }
+}
+@keyframes sway3
+{
+0% { transform: rotate(-45deg) translateX(-10px) rotateZ(-5deg); }
+100% { transform: rotate(-45deg) translateX(40px) rotateZ(25deg); }
 }
 
 /* Media queries for responsive design */
@@ -458,6 +585,9 @@ font-size: 12px;
 </style>
 </head>
 <body>
+<div id="intro-container"></div>
+<div id="falling-hearts-container"></div>
+
 <div class="music-controls">
 <div class="music-toggle" id="musicToggle">
 <i class="fas fa-volume-mute"></i>
@@ -668,6 +798,100 @@ resetTypingEffect();
 document.querySelector('.card').addEventListener('click', e => {
 e.stopPropagation();
 });
+
+// ---- Heart intro burst + endless falling hearts (ported from the Valentine version) ----
+// On load: 200 hearts bloom across the screen and fall away, then the card
+// fades in (see the .container opacity transition) and it starts raining hearts.
+function createHeartIntro() {
+const introContainer = document.getElementById('intro-container');
+const colors = ['#ee6779', '#fd556c', '#ff94a3', '#ffc1cc', '#ffffff', '#e35d6a'];
+const heartCount = 200;
+
+for (let i = 0; i < heartCount; i++) {
+const heart = document.createElement('div');
+heart.classList.add('intro-heart');
+const color = colors[Math.floor(Math.random() * colors.length)];
+heart.style.setProperty('--heart-color', color);
+
+const left = Math.random() * 100;
+const top = Math.random() * 100;
+heart.style.left = left + 'vw';
+heart.style.top = top + 'vh';
+heart.style.setProperty('--random-top', top + 'vh');
+
+const scale = Math.random() * 4 + 2;
+heart.style.setProperty('--final-scale', scale);
+
+heart.style.zIndex = Math.floor(Math.random() * 100);
+
+const delay = Math.random() * 0.8;
+heart.style.animationDelay = delay + 's';
+
+introContainer.appendChild(heart);
+}
+
+setTimeout(() => {
+document.querySelector('.container').style.opacity = '1';
+
+startFallingHearts();
+}, 4000);
+
+setTimeout(() => {
+introContainer.remove();
+}, 5000);
+}
+
+function startFallingHearts() {
+const container = document.getElementById('falling-hearts-container');
+const colors = ['#ee6779', '#fd556c', '#ff94a3', '#ffc1cc', '#ffffff'];
+
+const fallAnims = ['fallDown', 'fallDriftLeft', 'fallDriftRight'];
+const swayAnims = ['sway1', 'sway2', 'sway3'];
+
+setInterval(() => {
+const wrapper = document.createElement('div');
+wrapper.classList.add('falling-heart-wrapper');
+
+const heart = document.createElement('div');
+heart.classList.add('falling-heart-shape');
+
+const color = colors[Math.floor(Math.random() * colors.length)];
+heart.style.setProperty('--color', color);
+
+wrapper.style.left = Math.random() * 100 + 'vw';
+
+const scale = Math.random() * 1.2 + 0.5;
+wrapper.style.transform = `scale(${scale})`;
+
+const fallDuration = Math.random() * 4 + 4;
+wrapper.style.animationDuration = `${fallDuration}s`;
+
+const swayDuration = Math.random() * 2 + 2;
+heart.style.animationDuration = `${swayDuration}s`;
+
+const randomFall = fallAnims[Math.floor(Math.random() * fallAnims.length)];
+const randomSway = swayAnims[Math.floor(Math.random() * swayAnims.length)];
+
+wrapper.style.animationName = randomFall;
+heart.style.animationName = randomSway;
+
+wrapper.appendChild(heart);
+container.appendChild(wrapper);
+
+setTimeout(() => {
+wrapper.remove();
+}, fallDuration * 1000);
+
+}, 150);
+}
+
+// Kick off the intro as soon as the DOM is ready — waiting for 'load' would
+// also wait for the 3.6MB music.mp3 to download and delay the effect.
+if (document.readyState === 'loading') {
+document.addEventListener('DOMContentLoaded', createHeartIntro);
+} else {
+createHeartIntro();
+}
 </script>
 </body>
 </html>
