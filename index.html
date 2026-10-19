@@ -665,25 +665,37 @@ console.error("Audio error:", e);
 
 updateMusicUI();
 
-// FIX 4: mobile browsers block audio until the first user interaction.
-// One-time silent unlock. Listeners are removed FIRST and the unlock is
-// skipped if playback already started, so it can never cancel music the
-// user just turned on by tapping the Music button.
-if (isMobile) {
-const enableAudio = function() {
-document.removeEventListener('touchstart', enableAudio);
-document.removeEventListener('click', enableAudio);
+// FIX 4 + AUTOPLAY: browsers only allow audible playback after a user gesture.
+// Strategy: (1) try to start the music the moment the page opens — browsers
+// with permissive autoplay settings will play immediately; (2) if the browser
+// blocks it, the very first touch / click / keypress anywhere on the page
+// starts the music (playing inside a gesture handler is always allowed).
+function startMusicOnFirstInteraction() {
+const startMusic = function() {
+document.removeEventListener('touchend', startMusic);
+document.removeEventListener('click', startMusic);
+document.removeEventListener('keydown', startMusic);
 if (audioPlayer.paused) {
-audioPlayer.play().then(function() {
-audioPlayer.pause();
-audioPlayer.currentTime = 0;
-}).catch(function(e) { console.log("Audio preload failed:", e); });
+audioPlayer.play().catch(function(error) {
+console.error("Error playing audio:", error);
+});
 }
 };
 
-document.addEventListener('touchstart', enableAudio);
-document.addEventListener('click', enableAudio);
+document.addEventListener('touchend', startMusic);
+document.addEventListener('click', startMusic);
+document.addEventListener('keydown', startMusic);
 }
+
+function tryAutoplay() {
+audioPlayer.play().catch(function() {
+// Autoplay with sound was blocked by the browser — arm the
+// one-time first-gesture starter instead.
+startMusicOnFirstInteraction();
+});
+}
+
+tryAutoplay();
 
 // Note: the old audioPlayer 'ended' listener was removed — the `loop`
 // attribute on the <audio> element already handles seamless repeating.
