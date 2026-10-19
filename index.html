@@ -5,6 +5,9 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <link href="https://fonts.googleapis.com/css2?family=Quicksand:wght@400;500;600;700&display=swap" rel="stylesheet">
 <link href="https://fonts.googleapis.com/css2?family=Varela+Round&display=swap" rel="stylesheet">
+<!-- FIX 1: Font Awesome moved here. @import placed mid-stylesheet is invalid and was ignored,
+     so the play/mute icons never rendered (empty music button). -->
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.3/css/all.min.css">
 <title>Happy Womens Day</title>
 <style>
 *
@@ -74,8 +77,6 @@ font-weight: 600;
 text-shadow: 0 1px 1px rgba(0, 0, 0, 0.1);
 }
 
-@import url('https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.3/css/all.min.css');
-
 .evelope {
 position: relative;
 z-index: 1;
@@ -131,15 +132,12 @@ box-shadow: 0 15px 35px rgba(46, 42, 42, 0.6);
 animation-play-state: paused;
 }
 
+/* FIX 5: removed invalid nested @media blocks (media queries cannot be nested
+   inside a regular rule) — the responsive hover offsets now live in the
+   media query sections at the bottom of this stylesheet. */
 .card-hb:hover .card {
 transform: translateY(-160px);
 box-shadow: 0 15px 30px rgba(0, 0, 0, 0.25), inset 0 0 10px rgba(0, 0, 0, 0.1);
-@media (max-width: 768px) { 
-  transform: translateY(-130px);
-}
-@media (max-width: 480px) {
-  transform: translateY(-110px);
-}
 }
 
 .card-hb.disabled-hover:hover {
@@ -253,7 +251,7 @@ font-size: 16px;
 color: #666;
 line-height: 1.5;
 font-family: "Varela Round", sans-serif;
-height: 30px;
+min-height: 30px;
 }
 
 .out {
@@ -277,6 +275,10 @@ border-radius: 0px 0 32px 20px;
 
 /* Media queries for responsive design */
 @media (max-width: 768px) {
+.card-hb:hover .card {
+transform: translateY(-130px);
+}
+
 .card-hb {
 height: 200px;
 width: 90%;
@@ -353,6 +355,10 @@ top: 6px;
 }
 
 @media (max-width: 480px) {
+.card-hb:hover .card {
+transform: translateY(-110px);
+}
+
 .card-hb {
 height: 180px;
 width: 80%;
@@ -378,7 +384,7 @@ margin-bottom: 15px;
 
 .gift-i {
 font-size: 12px;
-height: 24px;
+min-height: 24px;
 }
 
 .hide {
@@ -459,8 +465,13 @@ font-size: 12px;
 <div class="music-label">Music</div>
 </div>
 
-<audio id="audioPlayer" loop>
-<source src="https://drive.google.com/file/d/1y5h1OqGpTwoQXmlS_p4QiZEgfIPpWOdp/view?usp=sharing" type="audio/mpeg">
+<!-- FIX 2: the old src was a Google Drive "view" link (/view?usp=sharing) which serves
+     an HTML viewer page, NOT audio — so playback always failed.
+     Now: local music.mp3 first (ship it next to this file), with the Drive
+     direct-download endpoint as an automatic fallback <source>. -->
+<audio id="audioPlayer" loop preload="auto">
+<source src="music.mp3" type="audio/mpeg">
+<source src="https://drive.usercontent.google.com/download?id=1y5h1OqGpTwoQXmlS_p4QiZEgfIPpWOdp&amp;export=download" type="audio/mpeg">
 </audio>
 
 <div class="container">
@@ -490,53 +501,82 @@ let envelopeVisible=true;
 let typingAnimation = null;
 let isTyping = false;
 let hasStartedTyping = false;
-let isPlaying = false;
 let isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
 
-// Fix for iOS audio
-document.addEventListener('DOMContentLoaded', function() {
-// iOS requires user interaction to play audio
-if (isMobile) {
-// Create a one-time event listener for the first user interaction
-const enableAudio = function() {
-audioPlayer.play().then(() => {
-audioPlayer.pause();
-}).catch(e => console.log("Audio preload failed:", e));
+// --- FIX 3: audio controls rewritten --------------------------------------
+// The old code flipped a manual `isPlaying` flag even when play() failed,
+// so the button desynced from reality. The UI is now driven by the real
+// 'play' / 'pause' events, so it can never go out of sync.
 
-// Remove event listeners after first interaction
-document.removeEventListener('touchstart', enableAudio);
-document.removeEventListener('click', enableAudio);
-};
-
-document.addEventListener('touchstart', enableAudio);
-document.addEventListener('click', enableAudio);
+function updateMusicUI() {
+const playing = !audioPlayer.paused;
+musicToggle.classList.toggle('playing', playing);
+musicToggle.innerHTML = playing
+? '<i class="fas fa-volume-up"></i>'
+: '<i class="fas fa-volume-mute"></i>';
 }
-});
 
 musicToggle.addEventListener('click', function() {
-if (isPlaying) {
-audioPlayer.pause();
-musicToggle.classList.remove('playing');
-musicToggle.innerHTML = '<i class="fas fa-volume-mute"></i>';
-} else {
+if (audioPlayer.paused) {
 audioPlayer.play().catch(function(error) {
 console.error("Error playing audio:", error);
 });
-musicToggle.classList.add('playing');
-musicToggle.innerHTML = '<i class="fas fa-volume-up"></i>';
+} else {
+audioPlayer.pause();
 }
-isPlaying = !isPlaying;
 });
 
-audioPlayer.addEventListener('ended', function() {
-audioPlayer.play();
-});
+audioPlayer.addEventListener('play', updateMusicUI);
+audioPlayer.addEventListener('pause', updateMusicUI);
 
 audioPlayer.addEventListener('error', function(e) {
 console.error("Audio error:", e);
 });
 
-const message = "Chúc các bạn nữ ngày 20/10 vui vẻ, ngày càng xinh đẹp.";
+updateMusicUI();
+
+// FIX 4: mobile browsers block audio until the first user interaction.
+// One-time silent unlock. Listeners are removed FIRST and the unlock is
+// skipped if playback already started, so it can never cancel music the
+// user just turned on by tapping the Music button.
+if (isMobile) {
+const enableAudio = function() {
+document.removeEventListener('touchstart', enableAudio);
+document.removeEventListener('click', enableAudio);
+if (audioPlayer.paused) {
+audioPlayer.play().then(function() {
+audioPlayer.pause();
+audioPlayer.currentTime = 0;
+}).catch(function(e) { console.log("Audio preload failed:", e); });
+}
+};
+
+document.addEventListener('touchstart', enableAudio);
+document.addEventListener('click', enableAudio);
+}
+
+// Note: the old audioPlayer 'ended' listener was removed — the `loop`
+// attribute on the <audio> element already handles seamless repeating.
+
+// Random greeting pool — a new one is picked every time the envelope is reopened
+const messages = [
+"Chúc bạn một ngày 20/10 vui vẻ, ngập tràn hoa, quà và những lời yêu thương.",
+"Chúc bạn ngày 20/10 thật vui vẻ, luôn xinh đẹp, hạnh phúc và gặp thật nhiều may mắn trong cuộc sống. Mong mọi điều tốt đẹp nhất sẽ đến với bạn!",
+"Chúc bạn có một ngày 20/10 ngập tràn hoa, quà, tiếng cười và những điều bất ngờ đáng yêu!"
+];
+
+let lastIndex = -1;
+
+function pickRandomMessage() {
+let i;
+do {
+i = Math.floor(Math.random() * messages.length);
+} while (messages.length > 1 && i === lastIndex);
+lastIndex = i;
+return messages[i];
+}
+
+let message = pickRandomMessage();
 
 function typeWriter(text, element, speed = 50) {
 if (isTyping || hasStartedTyping) return;
@@ -564,6 +604,7 @@ isTyping = false;
 }
 hasStartedTyping = false;
 giftI.innerHTML = '';
+message = pickRandomMessage();
 }
 
 function startTypingOnOpen() {
